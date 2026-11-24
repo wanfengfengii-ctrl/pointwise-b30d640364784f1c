@@ -19,6 +19,7 @@ python3 -B demo.py
 | `layout.registry.define` | `path, LayoutSpec`。返回布局号。`LayoutSpec` 接受布局号、字宽、每行字数和有序的 `FieldSpec`。字段定义依次为名称、零起字槽、最低位偏移、位宽、可选缺测码。 |
 | `intake.register.ingest` | `path, volume_id, layout_id, rows, manifest`。`InputRow` 依次包含行名、正整数页号、正整数页内位置、定宽字序列。`ManifestEntry` 依次包含行名、字数、页号、页内位置。返回含初版号的 `AcceptanceReceipt`。 |
 | `corrections.request.amend` | `path, volume_id, request_id, changes, *, hook=None`。每项改值为 `(row_id, field_name, reading)`，原请求参数按目标与值比较，输入排列可变。返回 `CorrectionReceipt` 或同号原撤销结果。 |
+| `corrections.request.amend_shared` | 同 `amend`，办理方式绑定为并办。仅并办单之间在同卷、原行、字段且目标值相同时可重叠；普通在办单或异值目标仍整单报 `FieldsBusy` 且不占号。同号续办、撤办、复领与 `resume` 沿用原规则。 |
 | `corrections.recover.resume` | `path, request_id, *, action='continue', hook=None`。`action='cancel'` 选择撤销未发布请求。同号重开可续成、续清理或复领终局。 |
 | `delivery.current.current` | `path, volume_id, fields=None, *, hook=None`。可选字段名序列，返回有序 `FieldObservation` 元组，每项带页位、字槽及原件或发布出处。 |
 | `delivery.snapshot.frozen` | `path, report_id`。返回 `FixedReport`，包含原正文及签发时的凭证。接纳初版包含全卷，勘误定稿包含本单签认的观测。 |

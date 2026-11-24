@@ -30,7 +30,9 @@ def read_current_fields(db, original, layout, keys=None, *, hook=None):
         word = packed[address]
         physical = None if word is None else decode_field(word, field)
         original_value = decode_field(rows[key.row_id].words[address.slot], field)
-        evidence = read_field_evidence(db, address, key.field_name)
+        # Pending tickets never obscure the cross-section: value and provenance
+        # come from the newest formal publication (or the sealed original).
+        evidence = read_field_evidence(db, address, key.field_name, published_only=True)
         observation = select_field_observation(origin, physical, original_value, evidence)
         result.append(observation)
         checkpoint(hook, 'after_observation', observation)

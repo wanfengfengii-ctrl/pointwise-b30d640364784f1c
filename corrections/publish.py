@@ -1,7 +1,7 @@
 from archive_db import WordUnavailable, checkpoint, connection, transaction
 from corrections.journal import CorrectionReceipt as CorrectionReceipt
 from corrections.journal import group_field_evidence, load_request, published_receipt, record_terminal, request_fields
-from corrections.pending import check_field_holder, release_fields
+from corrections.pending import field_held_by, release_fields
 from delivery.provenance import FieldObservation, published_provenance
 from delivery.selection import order_observations
 from delivery.snapshot import FixedReport, save_fixed_report
@@ -16,9 +16,9 @@ from words.write import check_write_outcome
 def _check_ready(db, request, layout, facts):
     for address, fields in group_field_evidence(facts):
         for item in fields:
-            holder = check_field_holder(db, address, item.field_name)
+            held = field_held_by(db, address, item.field_name, request.request_id)
             outcome = check_write_outcome(db, item.prepared_attempt)
-            if holder != request.request_id or outcome is not WriteOutcome.COMMITTED:
+            if not held or outcome is not WriteOutcome.COMMITTED:
                 raise WordUnavailable(f'preparation not confirmed for {address.row_id}/{item.field_name}')
         if not fields_match(db, layout, address, {item.field_name: item.target for item in fields}):
             raise WordUnavailable(f'prepared readings differ at {address}')

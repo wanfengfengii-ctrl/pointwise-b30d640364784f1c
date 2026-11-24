@@ -16,6 +16,7 @@ class CorrectionIdentity:
     publication: int | None
     report_id: str | None
     targets: tuple[tuple[str, str, Reading], ...]
+    mode: str = 'exclusive'
 
 
 @dataclass(frozen=True)
@@ -45,11 +46,16 @@ def initialise_corrections(db):
         request_id TEXT PRIMARY KEY,
         volume_id TEXT NOT NULL REFERENCES originals(volume_id),
         state TEXT NOT NULL CHECK (state IN ('pending', 'cancelling', 'cancelled', 'published')),
+        mode TEXT NOT NULL DEFAULT 'exclusive' CHECK (mode IN ('exclusive', 'shared')),
         publication INTEGER UNIQUE,
         report_id TEXT UNIQUE,
         CHECK ((state = 'published' AND publication IS NOT NULL AND report_id IS NOT NULL)
             OR (state <> 'published' AND publication IS NULL AND report_id IS NULL))
     )''')
+    # Additive upgrade for archives created before explicit shared handling existed.
+    columns = {row['name'] for row in db.execute('PRAGMA table_info(correction_requests)').fetchall()}
+    if 'mode' not in columns:
+        db.execute("ALTER TABLE correction_requests ADD COLUMN mode TEXT NOT NULL DEFAULT 'exclusive'")
     db.execute('''CREATE TABLE IF NOT EXISTS correction_fields (
         request_id TEXT NOT NULL REFERENCES correction_requests(request_id),
         row_id TEXT NOT NULL,
@@ -94,8 +100,9 @@ def canonical_request(changes):
     return tuple((row, field, value) for (row, field), value in sorted(targets.items()))
 
 
-def match_request(request, volume_id, targets):
-    if request.volume_id != volume_id or request.targets != targets:
+def match_request(request, volume_id, targets, mode='exclusive'):
+    if (request.volume_id != volume_id or request.targets != targets
+            or getattr(request, 'mode', 'exclusive') != mode):
         raise ConflictError(f'request already bound: {request.request_id}')
 
 
@@ -107,12 +114,15 @@ def load_request(db, request_id):
                          (request_id,))
     canonical = tuple(sorted((item['row_id'], item['field_name'], load_reading(item['target_value']))
                              for item in targets))
-    return CorrectionIdentity(request_id, row['volume_id'], row['state'], row['publication'], row['report_id'], canonical)
+    columns = row.keys()
+    mode = row['mode'] if 'mode' in columns else 'exclusive'
+    return CorrectionIdentity(request_id, row['volume_id'], row['state'], row['publication'], row['report_id'],
+                              canonical, mode)
 
 
-def record_pending(db, request_id, volume_id, evidence):
-    db.execute("INSERT INTO correction_requests (request_id, volume_id, state) VALUES (?, ?, 'pending')",
-               (request_id, volume_id))
+def record_pending(db, request_id, volume_id, evidence, mode='exclusive'):
+    db.execute("INSERT INTO correction_requests (request_id, volume_id, state, mode) VALUES (?, ?, 'pending', ?)",
+               (request_id, volume_id, mode))
     parameters = ((request_id, item.address.row_id, item.address.slot, item.field_name, number,
                    dump_reading(item.before), dump_reading(item.target), item.before_request, item.before_publication)
                   for number, item in enumerate(evidence))
